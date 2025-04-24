@@ -63,10 +63,11 @@ class CourseUpdate(CourseBase):
 class Course(CourseBase):
     id: str
     info: List[CourseInfo]
-    course: List[Section]  # Здесь называем "course" для совместимости с фронтендом
+    course: List[Section] = Field(..., alias="sections")  # Если в ORM это называется sections
 
     class Config:
         orm_mode = True
+        allow_population_by_field_name = True
 
 # Схема для ответа с списком курсов
 class CourseList(BaseModel):

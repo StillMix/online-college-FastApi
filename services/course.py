@@ -12,13 +12,16 @@ from schemas.course import CourseCreate, CourseUpdate
 BASE_DIR = Path(__file__).resolve().parent.parent
 COURSE_IMG_DIR = BASE_DIR / "CourseImg"
 
+
 def get_courses(db: Session, skip: int = 0, limit: int = 100):
     """Получить список курсов с пагинацией"""
     return db.query(Course).offset(skip).limit(limit).all()
 
+
 def get_course(db: Session, course_id: int):
     """Получить курс по ID"""
     return db.query(Course).filter(Course.id == course_id).first()
+
 
 def create_course(db: Session, course: CourseCreate):
     """Создать новый курс"""
@@ -34,10 +37,14 @@ def create_course(db: Session, course: CourseCreate):
         titleForCourse=course.titleForCourse
     )
     db.add(db_course)
-    db.flush()  # Получаем ID для курса перед добавлением связанных объектов
+    db.flush()  # Получаем ID для курса
+    
+    # Преобразуем ID в строку, если он числовой
+    course_id = str(db_course.id)
+    db_course.id = course_id  # Убедитесь, что ID сохраняется как строка
     
     # Создаем директорию для изображений курса
-    course_img_dir = COURSE_IMG_DIR / str(db_course.id)
+    course_img_dir = COURSE_IMG_DIR / course_id
     course_img_dir.mkdir(exist_ok=True)
     
     # Добавляем информацию о курсе
@@ -45,120 +52,132 @@ def create_course(db: Session, course: CourseCreate):
         db_info = CourseInfo(
             title=info_item.title,
             subtitle=info_item.subtitle,
-            course_id=db_course.id
+            course_id=db_course.id,
+            id=str(info_item.id)  # Убедитесь, что ID сохраняется как строка
         )
         db.add(db_info)
     
     # Добавляем разделы и уроки курса
+    sections = []
     for section_item in course.course:
         db_section = Section(
             name=section_item.name,
-            course_id=db_course.id
+            course_id=db_course.id,
+            id=str(section_item.id)  # Убедитесь, что ID сохраняется как строка
         )
         db.add(db_section)
-        db.flush()  # Получаем ID для раздела
+        db.flush()
         
         # Добавляем уроки к разделу
         for lesson_item in section_item.content:
             db_lesson = Lesson(
                 name=lesson_item.name,
                 passing=lesson_item.passing,
-                description=lesson_item.description
+                description=lesson_item.description,
+                id=str(lesson_item.id)  # Убедитесь, что ID сохраняется как строка
             )
             db.add(db_lesson)
-            db.flush()  # Получаем ID для урока
+            db.flush()
             
             # Связываем урок и раздел
             db_section.lessons.append(db_lesson)
+        
+        sections.append(db_section)
+    
+    # Убедитесь, что поле course правильно заполняется
+    db_course.sections = sections  # Это зависит от того, как называется свойство в вашей ORM модели
     
     db.commit()
     db.refresh(db_course)
     return db_course
+
 
 def update_course(db: Session, course_id: int, course: CourseUpdate):
     """Обновить существующий курс"""
     db_course = db.query(Course).filter(Course.id == course_id).first()
     if not db_course:
         raise HTTPException(status_code=404, detail="Курс не найден")
-    
+
     # Обновляем основные поля курса
     db_course.title = course.title
     db_course.subtitle = course.subtitle
     db_course.type = course.type
     db_course.timetoendL = course.timetoendL
     db_course.color = course.color
-    db_course.icon = course.icon
     db_course.icontype = course.icontype
     db_course.titleForCourse = course.titleForCourse
-    
+
     # Удаляем старую информацию о курсе и добавляем новую
     db.query(CourseInfo).filter(CourseInfo.course_id == course_id).delete()
     for info_item in course.info:
         db_info = CourseInfo(
-            title=info_item.title,
-            subtitle=info_item.subtitle,
-            course_id=db_course.id
+            title=info_item.title, subtitle=info_item.subtitle, course_id=db_course.id
         )
         db.add(db_info)
-    
+
     # Удаляем старые разделы и уроки
     for section in db_course.sections:
         for lesson in section.lessons:
             db.delete(lesson)
         db.delete(section)
-    
+
     # Добавляем новые разделы и уроки
     for section_item in course.course:
-        db_section = Section(
-            name=section_item.name,
-            course_id=db_course.id
-        )
+        db_section = Section(name=section_item.name, course_id=db_course.id)
         db.add(db_section)
         db.flush()
-        
+
         for lesson_item in section_item.content:
             db_lesson = Lesson(
                 name=lesson_item.name,
                 passing=lesson_item.passing,
-                description=lesson_item.description
+                description=lesson_item.description,
             )
             db.add(db_lesson)
             db.flush()
-            
+
             db_section.lessons.append(db_lesson)
-    
+
     db.commit()
     db.refresh(db_course)
     return db_course
+
 
 def delete_course(db: Session, course_id: int):
     """Удалить курс"""
     db_course = db.query(Course).filter(Course.id == course_id).first()
     if not db_course:
         raise HTTPException(status_code=404, detail="Курс не найден")
-    
+
     # Удаляем директорию с изображениями курса
     course_img_dir = COURSE_IMG_DIR / str(course_id)
     if course_img_dir.exists():
         shutil.rmtree(course_img_dir)
-    
+
     db.delete(db_course)
     db.commit()
     return {"detail": f"Курс с ID {course_id} успешно удален"}
+
 
 async def save_course_image(course_id: int, file: UploadFile):
     """Сохранить изображение для курса"""
     # Создаем директорию для изображений конкретного курса
     course_img_dir = COURSE_IMG_DIR / str(course_id)
     course_img_dir.mkdir(exist_ok=True)
-    
+
+    # Получаем расширение файла
+    file_extension = file.filename.split(".")[-1] if "." in file.filename else ""
+
+    # Формируем новое имя файла: icon-{course_id}.{extension}
+    new_filename = f"icon-{course_id}.{file_extension}"
+
     # Путь для сохранения файла
-    file_path = course_img_dir / file.filename
-    
+    file_path = course_img_dir / new_filename
+
     # Сохраняем файл
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-    
+
     # Возвращаем относительный путь к файлу (для использования в веб-приложении)
-    relative_path = f"CourseImg/{course_id}/{file.filename}"
-    return {"filename": file.filename, "path": relative_path}
+    relative_path = f"CourseImg/{course_id}/{new_filename}"
+    return {"filename": new_filename, "path": relative_path}
