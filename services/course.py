@@ -25,71 +25,113 @@ def get_course(db: Session, course_id: int):
 
 def create_course(db: Session, course: CourseCreate):
     """Создать новый курс"""
-    # Создаем запись курса
+    # Создаем запись курса с явным ID
+    new_id = str(len(get_courses(db)) + 1)  # Генерируем новый ID как строку
+
     db_course = Course(
+        id=new_id,  # Явно устанавливаем ID
         title=course.title,
         subtitle=course.subtitle,
         type=course.type,
         timetoendL=course.timetoendL,
         color=course.color,
-        icon=course.icon,
+        icon=course.icon if course.icon else None,
         icontype=course.icontype,
-        titleForCourse=course.titleForCourse
+        titleForCourse=course.titleForCourse,
     )
     db.add(db_course)
-    db.flush()  # Получаем ID для курса
-    
-    # Преобразуем ID в строку, если он числовой
-    course_id = str(db_course.id)
-    db_course.id = course_id  # Убедитесь, что ID сохраняется как строка
-    
+    db.flush()
+
+    # Используем ID напрямую, так как мы его уже установили
+    course_id_str = new_id
+
     # Создаем директорию для изображений курса
-    course_img_dir = COURSE_IMG_DIR / course_id
+    course_img_dir = COURSE_IMG_DIR / course_id_str
     course_img_dir.mkdir(exist_ok=True)
-    
+
     # Добавляем информацию о курсе
-    for info_item in course.info:
+    for index, info_item in enumerate(course.info):
+        unique_info_id = f"{course_id_str}_{index + 1}"
+
         db_info = CourseInfo(
+            id=unique_info_id,
             title=info_item.title,
             subtitle=info_item.subtitle,
-            course_id=db_course.id,
-            id=str(info_item.id)  # Убедитесь, что ID сохраняется как строка
+            course_id=course_id_str,
         )
         db.add(db_info)
-    
+
     # Добавляем разделы и уроки курса
     sections = []
-    for section_item in course.course:
+    for section_index, section_item in enumerate(course.course):
+        section_id = f"{course_id_str}_section_{section_index + 1}"
+
         db_section = Section(
-            name=section_item.name,
-            course_id=db_course.id,
-            id=str(section_item.id)  # Убедитесь, что ID сохраняется как строка
+            id=section_id, name=section_item.name, course_id=course_id_str
         )
         db.add(db_section)
         db.flush()
-        
+
         # Добавляем уроки к разделу
-        for lesson_item in section_item.content:
+        for lesson_index, lesson_item in enumerate(section_item.content):
+            lesson_id = f"{course_id_str}_lesson_{section_index + 1}_{lesson_index + 1}"
+
             db_lesson = Lesson(
+                id=lesson_id,
                 name=lesson_item.name,
                 passing=lesson_item.passing,
                 description=lesson_item.description,
-                id=str(lesson_item.id)  # Убедитесь, что ID сохраняется как строка
             )
             db.add(db_lesson)
             db.flush()
-            
+
             # Связываем урок и раздел
             db_section.lessons.append(db_lesson)
-        
+
+        # Сохраняем содержимое уроков для каждого раздела
+        db_section.content = section_item.content
+
         sections.append(db_section)
-    
-    # Убедитесь, что поле course правильно заполняется
-    db_course.sections = sections  # Это зависит от того, как называется свойство в вашей ORM модели
-    
+
+    db_course.sections = sections
+
     db.commit()
     db.refresh(db_course)
-    return db_course
+
+    # Преобразуем объект course для соответствия схеме
+    result = {
+        "id": db_course.id,
+        "title": db_course.title,
+        "subtitle": db_course.subtitle,
+        "type": db_course.type,
+        "timetoendL": db_course.timetoendL,
+        "color": db_course.color,
+        "icon": db_course.icon or "",  # Гарантируем, что icon не None
+        "icontype": db_course.icontype,
+        "titleForCourse": db_course.titleForCourse,
+        "info": [
+            {"id": info.id, "title": info.title, "subtitle": info.subtitle}
+            for info in db_course.info
+        ],
+        "course": [],  # Вместо sections, используем course
+    }
+
+    # Преобразуем разделы и уроки
+    for section in db_course.sections:
+        section_data = {"id": section.id, "name": section.name, "content": []}
+
+        for lesson in section.lessons:
+            lesson_data = {
+                "id": lesson.id,
+                "name": lesson.name,
+                "passing": lesson.passing,
+                "description": lesson.description or "",
+            }
+            section_data["content"].append(lesson_data)
+
+        result["course"].append(section_data)
+
+    return result
 
 
 def update_course(db: Session, course_id: int, course: CourseUpdate):

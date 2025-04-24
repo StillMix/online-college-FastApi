@@ -87,33 +87,6 @@ async def upload_course_image(
     # Сохраняем изображение
     result = await save_course_image(course_id, file)
 
-    # Обновляем путь к иконке в базе данных, если имя файла соответствует icon
-    if "icon" in file.filename.lower():
-        db_course.icon = result["path"]
-        db.commit()
-
-    return result
-
-
-@router.post("/{course_id}/upload-image")
-async def upload_course_image(
-    course_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)
-):
-    """
-    Загрузить изображение для курса
-    """
-    # Проверяем, существует ли курс
-    db_course = get_course(db, course_id=course_id)
-    if db_course is None:
-        raise HTTPException(status_code=404, detail="Курс не найден")
-
-    # Проверяем, что файл - изображение
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Файл должен быть изображением")
-
-    # Сохраняем изображение
-    result = await save_course_image(course_id, file)
-
     # Обновляем путь к иконке в базе данных
     db_course.icon = result["path"]
     db.commit()
