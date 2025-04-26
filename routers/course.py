@@ -260,7 +260,7 @@ async def create_lesson_endpoint(
     db.add(db_lesson)
     db.flush()
 
-    db_section.lessons.append(db_lesson)
+    db_section.content.append(db_lesson)
 
     db.commit()
     db.refresh(db_lesson)

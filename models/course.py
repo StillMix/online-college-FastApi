@@ -52,9 +52,13 @@ class Section(Base):
     name = Column(String)
     course_id = Column(String, ForeignKey("courses.id"))
 
-    # Отношения
+    content = relationship(
+        "Lesson",
+        secondary=lesson_section,
+        back_populates="sections", 
+    )
+
     course = relationship("Course", back_populates="sections")
-    lessons = relationship("Lesson", secondary=lesson_section, backref="sections")
 
 
 class Lesson(Base):
@@ -64,3 +68,7 @@ class Lesson(Base):
     name = Column(String)
     passing = Column(String)
     description = Column(Text, nullable=True)
+
+    sections = relationship(
+        "Section", secondary=lesson_section, back_populates="content"
+    )
