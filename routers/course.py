@@ -424,6 +424,83 @@ async def update_lesson_description_endpoint(
         raise HTTPException(status_code=400, detail="Поле 'description' обязательно")
 
 
+@router.post("/{course_id}/info/", response_model=CourseInfo)
+async def create_course_info_endpoint(
+    course_id: str, info: CourseInfoCreate, db: Session = Depends(get_db)
+):
+    """
+    Создать блок информации о курсе
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Создаем информацию о курсе
+    return create_course_info(db, course_id, info)
+
+
+@router.put("/{course_id}/info/{info_id}", response_model=CourseInfo)
+async def update_course_info_endpoint(
+    course_id: str, info_id: str, info: CourseInfoCreate, db: Session = Depends(get_db)
+):
+    """
+    Обновить блок информации о курсе
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем информацию о курсе
+    db_info = (
+        db.query(CourseInfo)
+        .filter(CourseInfo.id == info_id, CourseInfo.course_id == course_id)
+        .first()
+    )
+
+    if db_info is None:
+        raise HTTPException(status_code=404, detail="Информация о курсе не найдена")
+
+    # Обновляем информацию
+    db_info.title = info.title
+    db_info.subtitle = info.subtitle
+
+    db.commit()
+    db.refresh(db_info)
+
+    return db_info
+
+
+@router.delete("/{course_id}/info/{info_id}")
+async def delete_course_info_endpoint(
+    course_id: str, info_id: str, db: Session = Depends(get_db)
+):
+    """
+    Удалить блок информации о курсе
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем информацию о курсе
+    db_info = (
+        db.query(CourseInfo)
+        .filter(CourseInfo.id == info_id, CourseInfo.course_id == course_id)
+        .first()
+    )
+
+    if db_info is None:
+        raise HTTPException(status_code=404, detail="Информация о курсе не найдена")
+
+    # Удаляем информацию
+    db.delete(db_info)
+    db.commit()
+
+    return {"detail": f"Информация о курсе с ID {info_id} успешно удалена"}
+
+
 @router.put("/{course_id}", response_model=CourseSchema)
 async def update_existing_course(
     course_id: str, course: CourseUpdate, db: Session = Depends(get_db)
@@ -549,3 +626,89 @@ async def upload_image_with_course_data(
     updated_course = update_course(db, course_id, course)
 
     return updated_course
+
+
+@router.post("/{course_id}/sections/{section_id}/content/{lesson_id}/description")
+async def create_lesson_description_endpoint(
+    course_id: str,
+    section_id: str,
+    lesson_id: str,
+    description: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Создать описание урока
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Ищем урок
+    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+
+    if db_lesson is None:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+
+    # Создаем описание урока
+    if "description" in description:
+        db_lesson.description = description["description"]
+        db.commit()
+        db.refresh(db_lesson)
+
+        return {
+            "id": db_lesson.id,
+            "name": db_lesson.name,
+            "passing": db_lesson.passing,
+            "description": db_lesson.description or "",
+        }
+    else:
+        raise HTTPException(status_code=400, detail="Поле 'description' обязательно")
+
+
+@router.delete("/{course_id}/sections/{section_id}/content/{lesson_id}/description")
+async def delete_lesson_description_endpoint(
+    course_id: str,
+    section_id: str,
+    lesson_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Удалить описание урока
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Ищем урок
+    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+
+    if db_lesson is None:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+
+    # Удаляем описание урока
+    db_lesson.description = None
+    db.commit()
+
+    return {"detail": f"Описание урока с ID {lesson_id} успешно удалено"}
