@@ -332,7 +332,7 @@ async def delete_lesson_endpoint(
     if db_lesson is None:
         raise HTTPException(status_code=404, detail="Урок не найден")
 
-    db_section.lessons.remove(db_lesson)
+    db_section.content.remove(db_lesson)
     db.delete(db_lesson)
     db.commit()
 
