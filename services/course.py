@@ -317,3 +317,55 @@ def update_lesson_description(
         "passing": lesson.passing,
         "description": lesson.description or "",
     }
+
+
+def create_course_info(
+    db: Session, course_id: str, info: CourseInfoCreate
+) -> CourseInfo:
+    """Создать блок информации для курса"""
+    db_info = CourseInfo(
+        id=info.id, title=info.title, subtitle=info.subtitle, course_id=course_id
+    )
+
+    db.add(db_info)
+    db.commit()
+    db.refresh(db_info)
+
+    return db_info
+
+
+def create_course_section(
+    db: Session, course_id: str, section: SectionCreate
+) -> Section:
+    """Создать раздел для курса"""
+    db_section = Section(id=section.id, name=section.name, course_id=course_id)
+
+    db.add(db_section)
+    db.commit()
+    db.refresh(db_section)
+
+    # Создаем контент раздела, если он есть
+    for lesson_item in section.content:
+        db_lesson = create_lesson(db, section.id, lesson_item)
+        db_section.lessons.append(db_lesson)
+
+    db.commit()
+    db.refresh(db_section)
+
+    return db_section
+
+
+def create_lesson(db: Session, section_id: str, lesson: LessonCreate) -> Lesson:
+    """Создать урок для раздела"""
+    db_lesson = Lesson(
+        id=lesson.id,
+        name=lesson.name,
+        passing=lesson.passing,
+        description=lesson.description,
+    )
+
+    db.add(db_lesson)
+    db.commit()
+    db.refresh(db_lesson)
+
+    return db_lesson

@@ -61,6 +61,369 @@ async def create_new_course(course: CourseCreate, db: Session = Depends(get_db))
     return create_course(db=db, course=course)
 
 
+@router.post("/{course_id}/sections/", response_model=Section)
+async def create_course_section(
+    course_id: str, section: SectionCreate, db: Session = Depends(get_db)
+):
+    """
+    Создать раздел для курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Создаем раздел
+    db_section = Section(id=section.id, name=section.name, course_id=course_id)
+
+    db.add(db_section)
+    db.commit()
+    db.refresh(db_section)
+
+    # Создаем контент раздела, если он есть
+    for lesson_item in section.content:
+        db_lesson = Lesson(
+            id=lesson_item.id,
+            name=lesson_item.name,
+            passing=lesson_item.passing,
+            description=lesson_item.description,
+        )
+        db.add(db_lesson)
+        db.flush()
+
+        # Связываем урок и раздел
+        db_section.lessons.append(db_lesson)
+
+    db.commit()
+    db.refresh(db_section)
+
+    return db_section
+
+
+@router.delete("/{course_id}/sections/{section_id}")
+async def delete_course_section(
+    course_id: str, section_id: str, db: Session = Depends(get_db)
+):
+    """
+    Удалить раздел курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Удаляем раздел
+    db.delete(db_section)
+    db.commit()
+
+    return {"detail": f"Раздел с ID {section_id} успешно удален"}
+
+
+@router.put("/{course_id}/sections/{section_id}", response_model=Section)
+async def update_course_section(
+    course_id: str,
+    section_id: str,
+    section: SectionCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Обновить раздел курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Обновляем раздел
+    db_section.name = section.name
+    db.commit()
+
+    return db_section
+
+
+@router.post("/{course_id}/sections/", response_model=Section)
+async def create_course_section(
+    course_id: str, section: SectionCreate, db: Session = Depends(get_db)
+):
+    """
+    Создать раздел для курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Создаем раздел
+    db_section = Section(id=section.id, name=section.name, course_id=course_id)
+
+    db.add(db_section)
+    db.commit()
+    db.refresh(db_section)
+
+    # Создаем контент раздела, если он есть
+    for lesson_item in section.content:
+        db_lesson = Lesson(
+            id=lesson_item.id,
+            name=lesson_item.name,
+            passing=lesson_item.passing,
+            description=lesson_item.description,
+        )
+        db.add(db_lesson)
+        db.flush()
+
+        # Связываем урок и раздел
+        db_section.lessons.append(db_lesson)
+
+    db.commit()
+    db.refresh(db_section)
+
+    return db_section
+
+
+@router.delete("/{course_id}/sections/{section_id}")
+async def delete_course_section(
+    course_id: str, section_id: str, db: Session = Depends(get_db)
+):
+    """
+    Удалить раздел курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Удаляем раздел
+    db.delete(db_section)
+    db.commit()
+
+    return {"detail": f"Раздел с ID {section_id} успешно удален"}
+
+
+@router.put("/{course_id}/sections/{section_id}", response_model=Section)
+async def update_course_section(
+    course_id: str,
+    section_id: str,
+    section: SectionCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Обновить раздел курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Обновляем раздел
+    db_section.name = section.name
+    db.commit()
+
+    return db_section
+
+
+@router.post("/{course_id}/sections/{section_id}/content", response_model=Lesson)
+async def create_lesson(
+    course_id: str, section_id: str, lesson: LessonCreate, db: Session = Depends(get_db)
+):
+    """
+    Создать урок для раздела курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Создаем урок
+    db_lesson = Lesson(
+        id=lesson.id,
+        name=lesson.name,
+        passing=lesson.passing,
+        description=lesson.description,
+    )
+
+    db.add(db_lesson)
+    db.flush()
+
+    # Связываем урок и раздел
+    db_section.lessons.append(db_lesson)
+
+    db.commit()
+    db.refresh(db_lesson)
+
+    return db_lesson
+
+
+@router.delete("/{course_id}/sections/{section_id}/content/{lesson_id}")
+async def delete_lesson(
+    course_id: str, section_id: str, lesson_id: str, db: Session = Depends(get_db)
+):
+    """
+    Удалить урок из раздела курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Ищем урок
+    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+
+    if db_lesson is None:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+
+    # Удаляем урок из раздела
+    db_section.lessons.remove(db_lesson)
+
+    # Удаляем урок из базы данных
+    db.delete(db_lesson)
+    db.commit()
+
+    return {"detail": f"Урок с ID {lesson_id} успешно удален"}
+
+
+@router.put(
+    "/{course_id}/sections/{section_id}/content/{lesson_id}", response_model=Lesson
+)
+async def update_lesson(
+    course_id: str,
+    section_id: str,
+    lesson_id: str,
+    lesson: LessonCreate,
+    db: Session = Depends(get_db),
+):
+    """
+    Обновить урок в разделе курса
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Ищем урок
+    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+
+    if db_lesson is None:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+
+    # Обновляем урок
+    db_lesson.name = lesson.name
+    db_lesson.passing = lesson.passing
+
+    db.commit()
+    db.refresh(db_lesson)
+
+    return db_lesson
+
+
+@router.put("/{course_id}/sections/{section_id}/content/{lesson_id}/description")
+async def update_lesson_description_endpoint(
+    course_id: str,
+    section_id: str,
+    lesson_id: str,
+    description: dict = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Обновить описание урока
+    """
+    # Проверяем, существует ли курс
+    db_course = get_course(db, course_id=course_id)
+    if db_course is None:
+        raise HTTPException(status_code=404, detail="Курс не найден")
+
+    # Ищем раздел
+    db_section = (
+        db.query(Section)
+        .filter(Section.id == section_id, Section.course_id == course_id)
+        .first()
+    )
+
+    if db_section is None:
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    # Ищем урок
+    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
+
+    if db_lesson is None:
+        raise HTTPException(status_code=404, detail="Урок не найден")
+
+    # Обновляем описание урока
+    if "description" in description:
+        return update_lesson_description(db, lesson_id, description["description"])
+    else:
+        raise HTTPException(status_code=400, detail="Поле 'description' обязательно")
+
+
 @router.put("/{course_id}", response_model=CourseSchema)
 async def update_existing_course(
     course_id: str, course: CourseUpdate, db: Session = Depends(get_db)
