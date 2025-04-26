@@ -4,51 +4,58 @@ from pydantic import BaseModel, Field
 
 # Схемы для уроков
 class LessonBase(BaseModel):
-    id: str
     name: str
     passing: str = "no"
     description: Optional[str] = None
 
 
 class LessonCreate(LessonBase):
-    pass
+    id: str
 
 
 class Lesson(LessonBase):
+    id: str
+
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 # Схемы для разделов курса
 class SectionBase(BaseModel):
-    id: str
     name: str
-    content: List[LessonBase]
 
 
 class SectionCreate(SectionBase):
-    pass
+    id: str
+    content: List[LessonCreate]
 
 
 class Section(SectionBase):
+    id: str
+    content: List[Lesson]
+
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 # Схемы для информации о курсе
 class CourseInfoBase(BaseModel):
-    id: str
     title: str
     subtitle: str
 
 
 class CourseInfoCreate(CourseInfoBase):
-    pass
+    id: str
 
 
 class CourseInfo(CourseInfoBase):
+    id: str
+
     class Config:
         orm_mode = True
+        from_attributes = True
 
 
 # Схемы для курсов
@@ -58,12 +65,13 @@ class CourseBase(BaseModel):
     type: str
     timetoendL: str
     color: str = "#a63cf9"
-    icon: Optional[str] = None  # Делаем Optional с None по умолчанию
     icontype: str
     titleForCourse: str
 
 
 class CourseCreate(CourseBase):
+    id: Optional[str] = None
+    icon: Optional[str] = None
     info: List[CourseInfoCreate]
     course: List[
         SectionCreate
@@ -71,24 +79,20 @@ class CourseCreate(CourseBase):
 
 
 class CourseUpdate(CourseBase):
+    icon: Optional[str] = None
     info: List[CourseInfoCreate]
-    course: List[
-        SectionCreate
-    ]  # Здесь называем "course" для совместимости с фронтендом
+    course: List[SectionCreate]
 
 
 class Course(CourseBase):
     id: str
+    icon: Optional[str] = None
     info: List[CourseInfo]
-
-    # Переименовываем поле sections для соответствия ожиданиям фронтенда
-    course: List[Section] = Field(..., alias="sections")
+    course: List[Section] = Field(
+        ..., alias="sections"
+    )  # Переименовываем для совместимости
 
     class Config:
+        orm_mode = True
         from_attributes = True
-        validate_by_name = True
-
-
-# Схема для ответа с списком курсов
-class CourseList(BaseModel):
-    courses: List[Course]
+        allow_population_by_field_name = True
