@@ -340,7 +340,10 @@ async def delete_lesson_endpoint(
 
 
 # Роуты для описания урока
-@router.put("/{course_id}/sections/{section_id}/content/{lesson_id}/description")
+@router.put(
+    "/{course_id}/sections/{section_id}/content/{lesson_id}/description",
+    response_model=LessonSchema,
+)
 async def update_lesson_description_endpoint(
     course_id: str,
     section_id: str,
