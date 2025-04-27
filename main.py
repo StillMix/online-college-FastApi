@@ -49,6 +49,13 @@ app.mount(
     "/CourseImg", StaticFiles(directory=str(COURSE_IMG_DIR)), name="course_images"
 )
 
+# Монтирование директории с аватарами пользователей
+USERS_AVATAR_DIR = BASE_DIR / "UsersAvatar"
+USERS_AVATAR_DIR.mkdir(exist_ok=True)
+app.mount(
+    "/UsersAvatar", StaticFiles(directory=str(USERS_AVATAR_DIR)), name="user_avatars"
+)
+
 
 @app.get("/")
 def read_root():

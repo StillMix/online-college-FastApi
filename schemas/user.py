@@ -1,5 +1,6 @@
+# schemas/user.py
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 
 
 class SendVerificationCode(BaseModel):
@@ -17,11 +18,12 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    login: Optional[str]
-    email: Optional[EmailStr]
-    password: Optional[str]
-    img: Optional[str]
-    name: Optional[str]
+    login: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    img: Optional[str] = None
+    name: Optional[str] = None
+    role: Optional[str] = None
 
 
 class UserOut(BaseModel):
@@ -30,6 +32,17 @@ class UserOut(BaseModel):
     email: str
     name: Optional[str] = None
     img: Optional[str] = None
+    role: str = "student"
 
     class Config:
         orm_mode = True
+
+
+class UserCourse(BaseModel):
+    course_id: str
+    user_id: int
+
+
+class LessonCompletion(BaseModel):
+    lesson_id: str
+    user_id: int
