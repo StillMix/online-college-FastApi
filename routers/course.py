@@ -31,10 +31,8 @@ from services.course import (
     update_course,
     delete_course,
     save_course_image,
-    update_lesson_description,
     create_course_info,
     create_course_section,
-    create_lesson,
 )
 
 router = APIRouter(
@@ -337,78 +335,3 @@ async def delete_lesson_endpoint(
     db.commit()
 
     return {"detail": f"Урок с ID {lesson_id} успешно удален"}
-
-
-# Роуты для описания урока
-@router.put(
-    "/{course_id}/sections/{section_id}/content/{lesson_id}/description",
-    response_model=LessonSchema,
-)
-async def update_lesson_description_endpoint(
-    course_id: str,
-    section_id: str,
-    lesson_id: str,
-    description: Dict[str, str] = Body(...),
-    db: Session = Depends(get_db),
-):
-    """Обновить описание урока"""
-    db_course = get_course(db, course_id=course_id)
-    if db_course is None:
-        raise HTTPException(status_code=404, detail="Курс не найден")
-
-    db_section = (
-        db.query(Section)
-        .filter(Section.id == section_id, Section.course_id == course_id)
-        .first()
-    )
-
-    if db_section is None:
-        raise HTTPException(status_code=404, detail="Раздел не найден")
-
-    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
-
-    if db_lesson is None:
-        raise HTTPException(status_code=404, detail="Урок не найден")
-
-    if "description" in description:
-        db_lesson.description = description["description"]
-        db.commit()
-        db.refresh(db_lesson)
-
-        return {
-            "id": db_lesson.id,
-            "name": db_lesson.name,
-            "passing": db_lesson.passing,
-            "description": db_lesson.description or "",
-        }
-    else:
-        raise HTTPException(status_code=400, detail="Поле 'description' обязательно")
-
-
-@router.delete("/{course_id}/sections/{section_id}/content/{lesson_id}/description")
-async def delete_lesson_description_endpoint(
-    course_id: str, section_id: str, lesson_id: str, db: Session = Depends(get_db)
-):
-    """Удалить описание урока"""
-    db_course = get_course(db, course_id=course_id)
-    if db_course is None:
-        raise HTTPException(status_code=404, detail="Курс не найден")
-
-    db_section = (
-        db.query(Section)
-        .filter(Section.id == section_id, Section.course_id == course_id)
-        .first()
-    )
-
-    if db_section is None:
-        raise HTTPException(status_code=404, detail="Раздел не найден")
-
-    db_lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
-
-    if db_lesson is None:
-        raise HTTPException(status_code=404, detail="Урок не найден")
-
-    db_lesson.description = None
-    db.commit()
-
-    return {"detail": f"Описание урока с ID {lesson_id} успешно удалено"}
