@@ -18,6 +18,7 @@ from utils import send_email
 from models.VerificationCode import VerificationCode
 from typing import List
 from pathlib import Path
+from services.auth import get_password_hash
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -25,6 +26,45 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 BASE_DIR = Path(__file__).resolve().parent.parent
 USERS_AVATAR_DIR = BASE_DIR / "UsersAvatar"
 USERS_AVATAR_DIR.mkdir(exist_ok=True)
+
+
+@router.post("/confirm_email/")
+def confirm_email(
+    user_data: dict,
+    db: Session = Depends(get_db),
+):
+    # Извлекаем данные из JSON
+    email = user_data.get("email")
+    verification_code = user_data.get("verification_code")
+    login = user_data.get("login")
+    password = user_data.get("password")
+
+    # Проверяем, существует ли запись с этим email и кодом
+    db_verification = (
+        db.query(VerificationCode)
+        .filter(
+            VerificationCode.email == email, VerificationCode.code == verification_code
+        )
+        .first()
+    )
+
+    if not db_verification:
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    # Хешируем пароль
+    hashed_password = get_password_hash(password)
+
+    # Создаем пользователя
+    db_user = User(email=email, login=login, password=hashed_password, role="student")
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+
+    # Удаляем код после успешной регистрации
+    db.delete(db_verification)
+    db.commit()
+
+    return {"message": "User registered successfully", "user": db_user}
 
 
 @router.post("/confirm_email/")

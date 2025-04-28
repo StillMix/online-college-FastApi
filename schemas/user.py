@@ -7,6 +7,15 @@ class SendVerificationCode(BaseModel):
     email: EmailStr
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: Optional[str] = None
+
+
 class UserCreate(BaseModel):
     login: str
     email: EmailStr

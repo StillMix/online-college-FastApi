@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 
 from database import engine, Base
-from routers import course, user
+from routers import course, user, auth
 from models.course import Base as CourseBase
 
 # Создаем таблицы в базе данных
@@ -36,6 +36,7 @@ app.add_middleware(
 )
 
 # Регистрация маршрутов
+app.include_router(auth.router)
 app.include_router(course.router)
 app.include_router(user.router)
 
