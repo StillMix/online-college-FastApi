@@ -24,7 +24,10 @@ origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:8000",
-    "*",  # Добавляем wildcard для разработки (НЕ рекомендуется для продакшена)
+    "https://stillmix-online-college-fastapi-e9c2.twc1.net",
+    "https://stillmix-online-college-7fcc.twc1.net",
+    "http://stillmix-online-college-fastapi-e9c2.twc1.net",
+    "http://stillmix-online-college-7fcc.twc1.net",
 ]
 
 app.add_middleware(
