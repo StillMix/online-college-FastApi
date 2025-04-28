@@ -33,7 +33,7 @@ def get_password_hash(password):
 
 
 def authenticate_user(db: Session, username: str, password: str):
-    """Аутентифицирует пользователя по логину и паролю"""
+    """Аутентифицирует пользователя по логину/email и паролю"""
     # Ищем пользователя по логину или email
     user = (
         db.query(User)
@@ -44,8 +44,18 @@ def authenticate_user(db: Session, username: str, password: str):
     if not user:
         return False
 
-    if not verify_password(password, user.password):
-        return False
+    # Для существующих пользователей у которых пароль не хеширован
+    if not user.password.startswith("$2b$"):  # Проверяем, хеширован ли пароль
+        # Сравниваем пароли напрямую
+        if password != user.password:
+            return False
+        # Хешируем пароль и обновляем в базе данных
+        user.password = get_password_hash(password)
+        db.commit()
+    else:
+        # Для новых пользователей с хешированными паролями
+        if not verify_password(password, user.password):
+            return False
 
     return user
 
