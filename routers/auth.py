@@ -9,6 +9,7 @@ from services.auth import (
     create_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     get_password_hash,
+    get_current_active_user,
 )
 from models.user import User
 from schemas.user import UserOut, Token, UserCreate
