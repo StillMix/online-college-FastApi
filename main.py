@@ -24,6 +24,8 @@ origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:8000",
+    "https://109.73.194.69",
+    "http://109.73.194.69",
     "https://stillmix-online-college-fastapi-e9c2.twc1.net",
     "https://stillmix-online-college-7fcc.twc1.net",
 ]
