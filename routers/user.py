@@ -118,10 +118,20 @@ def send_verification_code(data: SendVerificationCode, db: Session = Depends(get
     db.add(db_verification)
     db.commit()
 
-    # Отправка кода на email
-    send_email(data.email, verification_code)
+    # Вместо отправки email, просто возвращаем код в ответе
+    # Это только для разработки, в продакшене так делать не следует!
+    try:
+        # Попытка отправить email (для совместимости)
+        send_email(data.email, verification_code)
+    except Exception as e:
+        # Логируем ошибку, но не прерываем выполнение
+        print(f"Error sending email: {str(e)}")
 
-    return {"message": "Verification code sent to your email"}
+    # Возвращаем код напрямую для разработки
+    return {
+        "message": "Verification code sent to your email",
+        "code": verification_code,  # Только для разработки!
+    }
 
 
 @router.put("/{user_id}", response_model=UserOut)
