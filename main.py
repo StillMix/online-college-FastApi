@@ -39,6 +39,7 @@ origins = [
     "http://109.73.194.69",
     "https://stillmix-online-college-fastapi-e9c2.twc1.net",
     "https://stillmix-online-college-7fcc.twc1.net",
+    "https://back.kktsback.tw1.ru",
 ]
 
 app.add_middleware(
