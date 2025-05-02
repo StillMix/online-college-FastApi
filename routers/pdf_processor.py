@@ -221,8 +221,6 @@ async def extract_course_from_pdf(
             if main_id in section_map:
                 # Генерация уникального ID
                 lesson_uuid = str(uuid.uuid4())
-                while lesson_uuid in processed_ids:
-                    lesson_uuid = str(uuid.uuid4())
                 processed_ids.add(lesson_uuid)
 
                 # Ищем текст урока с улучшенным алгоритмом
@@ -240,67 +238,39 @@ async def extract_course_from_pdf(
                 }
                 section_lessons[main_id].append(lesson)
 
-        # Для подразделов глубже второго уровня - добавляем их как дополнительные уроки ко второму уровню
-        for section in [
-            sub_sub_sections,
-            level4_sections,
-            level5_sections,
-            level6_sections,
+        # Обрабатываем более глубокие уровни заголовков (3-6)
+        # Каждый заголовок становится отдельным уроком
+        for deeper_sections, level in [
+            (sub_sub_sections, 3),
+            (level4_sections, 4),
+            (level5_sections, 5),
+            (level6_sections, 6),
         ]:
-            for section_id, section_name in section:
-                parts = section_id.split(".")
-                if len(parts) >= 2:
-                    main_id = parts[0]
-                    sub_id = f"{parts[0]}.{parts[1]}"
+            for section_id, section_name in deeper_sections:
+                main_id = section_id.split(".")[0]  # Получаем первый уровень
 
-                    # Ищем соответствующий урок второго уровня
-                    if main_id in section_lessons:
-                        parent_lessons = section_lessons[main_id]
-                        parent_found = False
+                if main_id in section_map:
+                    # Создаем новый урок для этого заголовка
+                    lesson_uuid = str(uuid.uuid4())
+                    processed_ids.add(lesson_uuid)
 
-                        for parent_lesson in parent_lessons:
-                            # Проверяем, является ли этот урок родительским для текущего подраздела
-                            if (
-                                sub_id in heading_dict
-                                and parent_lesson["name"] == heading_dict[sub_id]
-                            ):
-                                parent_found = True
-                                # Добавляем информацию о подразделе к описанию родительского урока
-                                if extract_content:
-                                    description = extract_text_between(
-                                        section_id, section_name, len(parts)
-                                    )
-                                    if parent_lesson["description"]:
-                                        parent_lesson[
-                                            "description"
-                                        ] += f"\n<h3>{section_name}</h3><div class='subcontent'>{description}</div>"
-                                    else:
-                                        parent_lesson["description"] = (
-                                            f"<h3>{section_name}</h3><div class='subcontent'>{description}</div>"
-                                        )
-                                break
+                    # Ищем текст урока
+                    lesson_description = ""
+                    if extract_content:
+                        lesson_description = extract_text_between(
+                            section_id, section_name, level
+                        )
 
-                        # Если родительский урок не найден, добавляем как отдельный урок
-                        if not parent_found:
-                            lesson_uuid = str(uuid.uuid4())
-                            while lesson_uuid in processed_ids:
-                                lesson_uuid = str(uuid.uuid4())
-                            processed_ids.add(lesson_uuid)
+                    # Создаем урок с соответствующим уровнем вложенности в заголовке
+                    lesson = {
+                        "id": lesson_uuid,
+                        "name": section_name,
+                        "passing": "no",
+                        "description": lesson_description,
+                    }
 
-                            lesson_description = ""
-                            if extract_content:
-                                lesson_description = extract_text_between(
-                                    section_id, section_name, len(parts)
-                                )
-
-                            section_lessons[main_id].append(
-                                {
-                                    "id": lesson_uuid,
-                                    "name": f"{section_name} (подраздел)",
-                                    "passing": "no",
-                                    "description": lesson_description,
-                                }
-                            )
+                    # Добавляем урок к соответствующему разделу первого уровня
+                    section_lessons[main_id].append(lesson)
 
         course_data.sections = sections
 
@@ -322,11 +292,11 @@ async def extract_course_from_pdf(
                     # Создаем уроки
                     for lesson_data in section_lessons[section_id]:
                         try:
-                            # Убедимся, что ID уникальный
-                            if (
-                                lesson_data["id"] in processed_ids
-                                and processed_ids.count(lesson_data["id"]) > 1
-                            ):
+                            # Проверяем, что ID не является дубликатом
+                            # Поскольку processed_ids это множество (set), а не список,
+                            # просто проверяем наличие ID в множестве
+                            if lesson_data["id"] in processed_ids:
+                                # Если ID уже использовался, генерируем новый
                                 lesson_data["id"] = str(uuid.uuid4())
 
                             create_course_lesson(
