@@ -181,3 +181,27 @@ def update_lesson_description(db: Session, lesson_id: str, description: str):
     db.commit()
     db.refresh(db_lesson)
     return db_lesson
+
+
+def create_course_lesson(
+    db: Session, course_id: str, section_id: str, lesson_data: dict
+):
+    """Создать урок для раздела курса"""
+    db_lesson = Lesson(
+        id=lesson_data.get("id", str(uuid.uuid4())),
+        name=lesson_data.get("name", "Новый урок"),
+        passing=lesson_data.get("passing", "no"),
+        description=lesson_data.get("description", ""),
+    )
+    db.add(db_lesson)
+    db.flush()
+
+    db_section = db.query(Section).filter(Section.id == section_id).first()
+    if not db_section:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="Раздел не найден")
+
+    db_section.content.append(db_lesson)
+    db.commit()
+    db.refresh(db_lesson)
+    return db_lesson

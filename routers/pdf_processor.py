@@ -19,7 +19,11 @@ router = APIRouter(
 
 @router.post("/extract_course")
 async def extract_course_from_pdf(
-    file: UploadFile = File(...), db: Session = Depends(get_db)
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    extract_toc: bool = True,
+    create_lessons: bool = True,
+    extract_content: bool = True,
 ):
     """
     Извлекает структуру курса из PDF-файла и создает соответствующие записи в базе данных
@@ -63,7 +67,7 @@ async def extract_course_from_pdf(
 
         # Создаем разделы и уроки на основе структуры PDF
         sections = []
-        lessons_data = []  # Для хранения данных об уроках и их связях с разделами
+        lessons_count = 0
 
         for section_id, section_name in main_sections:
             section_uuid = str(uuid.uuid4())
@@ -74,31 +78,44 @@ async def extract_course_from_pdf(
             related_subsections = [
                 s for s in sub_sections if s[0].startswith(section_id + ".")
             ]
-
-            # Создаем уроки из подразделов
-            for subsection_id, subsection_name in related_subsections:
-                lesson_uuid = str(uuid.uuid4())
-                lesson = LessonCreate(
-                    id=lesson_uuid,
-                    name=subsection_name,
-                    passing="no",
-                    description=f"Урок по теме: {subsection_name}",
-                )
-                lessons_data.append((section_uuid, lesson))
+            lessons_count += len(related_subsections)
 
         course_data.sections = sections
 
         # Создаем курс в базе данных
-        from services.course import create_course, create_lesson
+        from services.course import create_course
 
         db_course = create_course(db, course_data)
 
         # Создаем уроки и связываем их с разделами
-        for section_uuid, lesson in lessons_data:
-            create_lesson(db, section_uuid, lesson)
+        if create_lessons:
+            from services.course import create_course_lesson
 
-        # Подсчитываем общее количество уроков
-        lessons_count = len(lessons_data)
+            for section_id, section_name in main_sections:
+                # Находим UUID секции
+                section_uuid = next(
+                    (s.id for s in sections if s.name == section_name), None
+                )
+                if not section_uuid:
+                    continue
+
+                # Находим подразделы для текущего раздела
+                related_subsections = [
+                    s for s in sub_sections if s[0].startswith(section_id + ".")
+                ]
+
+                # Создаем уроки из подразделов
+                for subsection_id, subsection_name in related_subsections:
+                    lesson_uuid = str(uuid.uuid4())
+                    lesson_data = {
+                        "id": lesson_uuid,
+                        "name": subsection_name,
+                        "passing": "no",
+                        "description": f"Урок по теме: {subsection_name}",
+                    }
+
+                    # Создаем урок для секции
+                    create_course_lesson(db, db_course.id, section_uuid, lesson_data)
 
         return {
             "message": "Курс успешно создан из PDF",
