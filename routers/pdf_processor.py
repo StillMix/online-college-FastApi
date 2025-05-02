@@ -63,11 +63,11 @@ async def extract_course_from_pdf(
 
         # Создаем разделы и уроки на основе структуры PDF
         sections = []
-        current_section = None
+        lessons_data = []  # Для хранения данных об уроках и их связях с разделами
 
         for section_id, section_name in main_sections:
             section_uuid = str(uuid.uuid4())
-            section = SectionCreate(id=section_uuid, name=section_name, content=[])
+            section = SectionCreate(id=section_uuid, name=section_name)
             sections.append(section)
 
             # Находим подразделы для текущего раздела
@@ -84,21 +84,28 @@ async def extract_course_from_pdf(
                     passing="no",
                     description=f"Урок по теме: {subsection_name}",
                 )
-                section.content.append(lesson)
+                lessons_data.append((section_uuid, lesson))
 
         course_data.sections = sections
 
         # Создаем курс в базе данных
-        from services.course import create_course
+        from services.course import create_course, create_lesson
 
         db_course = create_course(db, course_data)
+
+        # Создаем уроки и связываем их с разделами
+        for section_uuid, lesson in lessons_data:
+            create_lesson(db, section_uuid, lesson)
+
+        # Подсчитываем общее количество уроков
+        lessons_count = len(lessons_data)
 
         return {
             "message": "Курс успешно создан из PDF",
             "course_id": db_course.id,
             "title": db_course.title,
             "sections_count": len(sections),
-            "lessons_count": sum(len(section.content) for section in sections),
+            "lessons_count": lessons_count,
         }
 
     except Exception as e:
