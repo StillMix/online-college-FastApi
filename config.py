@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "Онлайн-колледж API"
     API_VERSION: str = "0.1.0"
     DEBUG: bool = True
-
     # Настройки базы данных
     DATABASE_URL: str = "sqlite:///./db/college.db"
 
@@ -36,7 +35,7 @@ class Settings(BaseSettings):
     ]
 
     # Настройки загрузки файлов
-    MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10 MB
+    MAX_UPLOAD_SIZE: 0  # 10 MB
     ALLOWED_IMAGE_TYPES: list = [
         "image/jpeg",
         "image/png",

@@ -4,14 +4,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import os
+from starlette.middleware.base import BaseHTTPMiddleware  # Добавлен импорт
 
 from database import engine, Base
 from routers import course, user, auth, pdf_processor
 from models.course import Base as CourseBase
 
+
+# Создаем класс промежуточного ПО для отключения ограничения размера файла
+class LimitUploadSize(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Отключаем проверку размера файла
+        request.state.max_upload_size = None
+        return await call_next(request)
+
+
 # Создаем таблицы в базе данных
 CourseBase.metadata.create_all(bind=engine)
 
+# Создаем FastAPI приложение один раз
 app = FastAPI(
     title="Онлайн-колледж API",
     description="API для платформы онлайн-обучения",
@@ -38,6 +49,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Добавляем middleware для отключения ограничения размера файлов
+app.add_middleware(LimitUploadSize)
 
 # Регистрация маршрутов
 app.include_router(auth.router)
@@ -82,9 +95,20 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # Для запуска приложения используйте:
-# uvicorn main:app --reload --port 8000
+# uvicorn main:app --reload --port 8000 --limit-upload 0
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app,
+        port=8000,
+        limit_concurrency=100,
+        limit_max_requests=0,
+        timeout_keep_alive=120,
+        # Важные параметры для больших файлов:
+        http="h11",
+        loop="asyncio",
+        # Размер в байтах (0 для отключения ограничения)
+        limit_upload=0,
+    )
