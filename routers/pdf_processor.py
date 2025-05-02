@@ -17,6 +17,7 @@ router = APIRouter(
 )
 
 
+# Изменим функцию extract_course_from_pdf в файле routers/pdf_processor.py
 @router.post("/extract_course")
 async def extract_course_from_pdf(
     file: UploadFile = File(...),
@@ -47,6 +48,7 @@ async def extract_course_from_pdf(
             page_texts[page_num] = page_text
 
         # Находим структуру с помощью регулярных выражений для извлечения заголовков разных уровней
+        # Основные разделы и подразделы до 6 уровня вложенности
         main_sections = re.findall(r"^\s*(\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE)
         sub_sections = re.findall(
             r"^\s*(\d+\.\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE
@@ -54,14 +56,56 @@ async def extract_course_from_pdf(
         sub_sub_sections = re.findall(
             r"^\s*(\d+\.\d+\.\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE
         )
+        level4_sections = re.findall(
+            r"^\s*(\d+\.\d+\.\d+\.\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE
+        )
+        level5_sections = re.findall(
+            r"^\s*(\d+\.\d+\.\d+\.\d+\.\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE
+        )
+        level6_sections = re.findall(
+            r"^\s*(\d+\.\d+\.\d+\.\d+\.\d+\.\d+)\.?\s+([^\n]+)", full_text, re.MULTILINE
+        )
+
+        # Ищем также элементы введения (обычно в начале документа)
+        intro_sections = re.findall(
+            r"^\s*(Введение|Предисловие|Вступление|Аннотация)[\s\.]*(.*?)$",
+            full_text,
+            re.MULTILINE,
+        )
+
+        # Ищем заголовки с типичной структурой, но без номеров
+        unnumbered_sections = re.findall(
+            r"^\s*([A-ZА-ЯЁ][A-ZА-ЯЁa-zа-яё\s]{2,})$", full_text, re.MULTILINE
+        )
 
         # Собираем все заголовки для последующего извлечения контента
-        all_headings = main_sections + sub_sections + sub_sub_sections
-        all_headings.sort(key=lambda x: x[0])  # Сортируем по номеру раздела
+        all_headings = (
+            main_sections
+            + sub_sections
+            + sub_sub_sections
+            + level4_sections
+            + level5_sections
+            + level6_sections
+        )
+
+        # Создаем словарь для быстрого доступа к заголовкам по их идентификаторам
+        heading_dict = {id: name for id, name in all_headings}
+
+        # Сортируем заголовки для правильного определения содержимого
+        all_headings.sort(
+            key=lambda x: [
+                int(n) if n.isdigit() else float(n)
+                for n in x[0].replace(".", ".0").split(".")
+            ]
+        )
 
         # Создаем структуру курса
         course_id = str(uuid.uuid4())
-        course_title = main_sections[0][1] if main_sections else "Новый курс из PDF"
+        course_title = file.filename.split(".")[0]
+        if main_sections and len(main_sections) > 0:
+            course_title = main_sections[0][1]
+        elif intro_sections and len(intro_sections) > 0:
+            course_title = intro_sections[0][0] + " " + intro_sections[0][1]
 
         course_data = CourseCreate(
             id=course_id,
@@ -81,6 +125,48 @@ async def extract_course_from_pdf(
         sections = []
         section_map = {}  # Для связывания разделов с их идентификаторами
         lessons_count = 0
+        processed_ids = set()  # Для отслеживания уже использованных ID
+
+        # Создаем раздел "Введение", если нашли информацию о нем
+        if intro_sections:
+            intro_uuid = str(uuid.uuid4())
+            intro_section = SectionCreate(id=intro_uuid, name="Введение")
+            sections.append(intro_section)
+            section_map["0"] = intro_uuid  # Используем "0" как ID для введения
+
+            # Создаем уроки для введения
+            intro_lessons = []
+            for i, (title, content) in enumerate(intro_sections):
+                lesson_uuid = str(uuid.uuid4())
+                processed_ids.add(lesson_uuid)
+                lesson_name = f"{title} {content}" if content else title
+                intro_lessons.append(
+                    {
+                        "id": lesson_uuid,
+                        "name": lesson_name[:50],  # Ограничиваем длину имени
+                        "passing": "no",
+                        "description": f"<h2>{title}</h2><p>{content}</p>",
+                    }
+                )
+
+            # Также добавляем ненумерованные заголовки в раздел введения
+            for i, title in enumerate(
+                unnumbered_sections[:3]
+            ):  # Ограничиваем количество
+                lesson_uuid = str(uuid.uuid4())
+                processed_ids.add(lesson_uuid)
+                intro_lessons.append(
+                    {
+                        "id": lesson_uuid,
+                        "name": title[:50],  # Ограничиваем длину имени
+                        "passing": "no",
+                        "description": f"<h3>{title}</h3>",
+                    }
+                )
+
+            section_lessons = {"0": intro_lessons}
+        else:
+            section_lessons = {}
 
         # Создаем основные разделы
         for section_id, section_name in main_sections:
@@ -88,25 +174,63 @@ async def extract_course_from_pdf(
             section = SectionCreate(id=section_uuid, name=section_name)
             sections.append(section)
             section_map[section_id] = section_uuid
+            section_lessons[section_id] = []
 
-        # Собираем уроки для каждого раздела
-        section_lessons = {section_id: [] for section_id, _ in main_sections}
+        # Функция для извлечения текста между заголовками
+        def extract_text_between(start_id, start_name, level):
+            start_pattern = f"{re.escape(start_id)}.?\\s+{re.escape(start_name)}"
 
-        # Добавляем подсекции как уроки
+            # Ищем следующий заголовок того же или более высокого уровня
+            next_patterns = []
+            if level == 1:  # Для основных разделов
+                next_patterns.append(r"(\d+)\.?\s+([^\n]+)")
+            elif level == 2:  # Для подразделов
+                next_patterns.append(r"(\d+\.\d+)\.?\s+([^\n]+)")
+                next_patterns.append(r"(\d+)\.?\s+([^\n]+)")
+            elif level == 3:  # Для подподразделов
+                next_patterns.append(r"(\d+\.\d+\.\d+)\.?\s+([^\n]+)")
+                next_patterns.append(r"(\d+\.\d+)\.?\s+([^\n]+)")
+                next_patterns.append(r"(\d+)\.?\s+([^\n]+)")
+            elif level >= 4:  # Для всех остальных уровней
+                for i in range(level, 0, -1):
+                    pattern = r"(\d+" + r"\.\d+" * (i - 1) + r")\.?\s+([^\n]+)"
+                    next_patterns.append(pattern)
+
+            # Создаем паттерн для поиска
+            content_pattern = f"{start_pattern}(.*?)(?:"
+            for i, pat in enumerate(next_patterns):
+                if i > 0:
+                    content_pattern += "|"
+                content_pattern += f"(?:{pat})"
+            content_pattern += "|$)"
+
+            content_match = re.search(content_pattern, full_text, re.DOTALL)
+
+            if content_match:
+                content = content_match.group(1).strip()
+                # Обрабатываем контент - удаляем лишние пробелы, переносы строк и т.д.
+                content = re.sub(r"\s+", " ", content)
+                # Форматируем как HTML
+                return f"<h2>{start_name}</h2><div class='content'>{content}</div>"
+            else:
+                return f"<h2>{start_name}</h2>"
+
+        # Добавляем подсекции как уроки ко всем основным разделам
         for subsection_id, subsection_name in sub_sections:
             main_id = subsection_id.split(".")[0]
             if main_id in section_map:
+                # Генерация уникального ID
                 lesson_uuid = str(uuid.uuid4())
+                while lesson_uuid in processed_ids:
+                    lesson_uuid = str(uuid.uuid4())
+                processed_ids.add(lesson_uuid)
 
-                # Ищем текст урока, если extract_content=True
-                lesson_description = f"Урок по теме: {subsection_name}"
+                # Ищем текст урока с улучшенным алгоритмом
+                lesson_description = ""
                 if extract_content:
-                    # Поиск контента для урока (упрощенная версия)
-                    # Здесь должен быть более сложный алгоритм для извлечения текста между заголовками
-                    pattern = f"{subsection_id}\\s+{re.escape(subsection_name)}\\s+(.*?)(?=\\d+\\.\\d+|\\d+\\.|$)"
-                    content_match = re.search(pattern, full_text, re.DOTALL)
-                    if content_match:
-                        lesson_description = content_match.group(1).strip()
+                    lesson_description = extract_text_between(
+                        subsection_id, subsection_name, 2
+                    )
 
                 lesson = {
                     "id": lesson_uuid,
@@ -116,27 +240,67 @@ async def extract_course_from_pdf(
                 }
                 section_lessons[main_id].append(lesson)
 
-        # Также добавляем подподсекции как уроки
-        for subsubsection_id, subsubsection_name in sub_sub_sections:
-            main_id = subsubsection_id.split(".")[0]
-            if main_id in section_map:
-                lesson_uuid = str(uuid.uuid4())
+        # Для подразделов глубже второго уровня - добавляем их как дополнительные уроки ко второму уровню
+        for section in [
+            sub_sub_sections,
+            level4_sections,
+            level5_sections,
+            level6_sections,
+        ]:
+            for section_id, section_name in section:
+                parts = section_id.split(".")
+                if len(parts) >= 2:
+                    main_id = parts[0]
+                    sub_id = f"{parts[0]}.{parts[1]}"
 
-                # Ищем текст урока
-                lesson_description = f"Урок по теме: {subsubsection_name}"
-                if extract_content:
-                    pattern = f"{subsubsection_id}\\s+{re.escape(subsubsection_name)}\\s+(.*?)(?=\\d+\\.\\d+\\.\\d+|\\d+\\.\\d+|\\d+\\.|$)"
-                    content_match = re.search(pattern, full_text, re.DOTALL)
-                    if content_match:
-                        lesson_description = content_match.group(1).strip()
+                    # Ищем соответствующий урок второго уровня
+                    if main_id in section_lessons:
+                        parent_lessons = section_lessons[main_id]
+                        parent_found = False
 
-                lesson = {
-                    "id": lesson_uuid,
-                    "name": subsubsection_name,
-                    "passing": "no",
-                    "description": lesson_description,
-                }
-                section_lessons[main_id].append(lesson)
+                        for parent_lesson in parent_lessons:
+                            # Проверяем, является ли этот урок родительским для текущего подраздела
+                            if (
+                                sub_id in heading_dict
+                                and parent_lesson["name"] == heading_dict[sub_id]
+                            ):
+                                parent_found = True
+                                # Добавляем информацию о подразделе к описанию родительского урока
+                                if extract_content:
+                                    description = extract_text_between(
+                                        section_id, section_name, len(parts)
+                                    )
+                                    if parent_lesson["description"]:
+                                        parent_lesson[
+                                            "description"
+                                        ] += f"\n<h3>{section_name}</h3><div class='subcontent'>{description}</div>"
+                                    else:
+                                        parent_lesson["description"] = (
+                                            f"<h3>{section_name}</h3><div class='subcontent'>{description}</div>"
+                                        )
+                                break
+
+                        # Если родительский урок не найден, добавляем как отдельный урок
+                        if not parent_found:
+                            lesson_uuid = str(uuid.uuid4())
+                            while lesson_uuid in processed_ids:
+                                lesson_uuid = str(uuid.uuid4())
+                            processed_ids.add(lesson_uuid)
+
+                            lesson_description = ""
+                            if extract_content:
+                                lesson_description = extract_text_between(
+                                    section_id, section_name, len(parts)
+                                )
+
+                            section_lessons[main_id].append(
+                                {
+                                    "id": lesson_uuid,
+                                    "name": f"{section_name} (подраздел)",
+                                    "passing": "no",
+                                    "description": lesson_description,
+                                }
+                            )
 
         course_data.sections = sections
 
@@ -151,13 +315,27 @@ async def extract_course_from_pdf(
 
             lessons_count = 0
 
-            for section_id, section_name in main_sections:
-                section_uuid = section_map[section_id]
+            for section_id in section_lessons:
+                if section_id in section_map:
+                    section_uuid = section_map[section_id]
 
-                # Создаем уроки из подразделов
-                for lesson_data in section_lessons[section_id]:
-                    create_course_lesson(db, db_course.id, section_uuid, lesson_data)
-                    lessons_count += 1
+                    # Создаем уроки
+                    for lesson_data in section_lessons[section_id]:
+                        try:
+                            # Убедимся, что ID уникальный
+                            if (
+                                lesson_data["id"] in processed_ids
+                                and processed_ids.count(lesson_data["id"]) > 1
+                            ):
+                                lesson_data["id"] = str(uuid.uuid4())
+
+                            create_course_lesson(
+                                db, db_course.id, section_uuid, lesson_data
+                            )
+                            lessons_count += 1
+                        except Exception as e:
+                            print(f"Ошибка при создании урока: {str(e)}")
+                            continue
 
         return {
             "message": "Курс успешно создан из PDF",
