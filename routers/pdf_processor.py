@@ -131,7 +131,12 @@ async def preview_main_sections_from_pdf(
             result["sections"].append(section_data)  # Меняем с "course" на "sections"
 
         # Создание нового курса в базе данных
-        course_data = CourseCreate(
+        # Генерируем уникальный ID для курса
+        course_id = str(uuid.uuid4())
+
+        # Создаем курс в базе данных
+        db_course = Course(
+            id=course_id,
             title=course_title,
             subtitle="Базовый курс для начинающих программистов",
             type="ПРОГРАММИРОВАНИЕ",
@@ -140,15 +145,35 @@ async def preview_main_sections_from_pdf(
             icon="",
             icontype="programIcon",
             titleForCourse=course_title,
-            info=[],
-            sections=[
-                SectionCreate(id=sec["id"], name=sec["name"])
-                for sec in result["sections"]
-            ],  # Добавляем разделы
         )
+        db.add(db_course)
+        db.flush()  # Необходимо для получения ID курса
 
-        # Добавляем информацию о курсе
-        db_course = create_course(db=db, course=course_data)
+        # Создаем разделы и уроки
+        for section_data in result["sections"]:
+            db_section = Section(
+                id=section_data["id"],
+                name=section_data["name"],
+                course_id=course_id,
+            )
+            db.add(db_section)
+            db.flush()
+
+            # Создаем уроки для этого раздела
+            for content_item in section_data["content"]:
+                db_lesson = Lesson(
+                    id=content_item["id"],
+                    name=content_item["name"],
+                    passing=content_item["passing"],
+                    description=content_item["description"],
+                )
+                db.add(db_lesson)
+                db.flush()
+
+                # Связываем урок с разделом
+                db_section.content.append(db_lesson)
+
+        db.commit()
 
         return result
 
